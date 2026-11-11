@@ -1,21 +1,5 @@
 # ============================================================
-# STAGE 1 — Build de assets (Node)
-# ============================================================
-FROM node:22-alpine AS assets
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# O projeto inteiro é copiado porque o Tailwind 4 escaneia todo o código-fonte
-# (resources/, app/, config/…) para descobrir as classes usadas.
-# O .dockerignore mantém node_modules/vendor/.git fora daqui.
-COPY . .
-RUN npm run build
-
-# ============================================================
-# STAGE 2 — Dependências PHP (Composer)
+# STAGE 1 — Dependências PHP (Composer)
 # ============================================================
 FROM php:8.4-fpm-alpine AS vendor
 
@@ -35,6 +19,26 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-in
 # Agora o código, e finaliza o autoloader otimizado
 COPY . .
 RUN composer dump-autoload --no-dev --optimize --classmap-authoritative --no-scripts
+
+# ============================================================
+# STAGE 2 — Build de assets (Node)
+# ============================================================
+FROM node:22-alpine AS assets
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# O projeto inteiro é copiado porque o Tailwind 4 escaneia todo o código-fonte
+# (resources/, app/, config/…) para descobrir as classes usadas.
+# O .dockerignore mantém node_modules/vendor/.git fora daqui.
+COPY . .
+
+# O CSS importa o tema e escaneia as views do TallStackUI em vendor/ (resources/css/app.css),
+# então o vendor do stage anterior precisa estar presente no build.
+COPY --from=vendor /var/www/vendor ./vendor
+RUN npm run build
 
 # ============================================================
 # STAGE 3 — Imagem final de runtime
