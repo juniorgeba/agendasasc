@@ -1,6 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Vite;
+
+/**
+ * Aponta o Vite para um "hot file" falso, para os testes não dependerem de `npm run build`
+ * nem do `npm run dev` estar rodando.
+ */
+beforeEach(function () {
+    $hotFile = tempnam(sys_get_temp_dir(), 'vite-hot');
+    file_put_contents($hotFile, 'http://vite.test');
+
+    Vite::useHotFile($hotFile);
+});
 
 it('renders TallStackUI components inside the base layout with its script and Livewire assets', function () {
     $html = Blade::render('<x-layouts::app><x-button text="Salvar" /></x-layouts::app>');
@@ -15,9 +27,8 @@ it('renders TallStackUI components inside the base layout with its script and Li
 it('loads the TallStackUI script before the Vite assets', function () {
     $html = Blade::render('<x-layouts::app>conteúdo</x-layouts::app>');
 
-    // Build (`/build/assets/`) ou dev server do Vite (`/resources/css/app.css`).
-    preg_match('#/build/assets/|/resources/css/app\.css#', $html, $viteMatch, PREG_OFFSET_CAPTURE);
+    $vitePosition = strpos($html, 'http://vite.test/resources/css/app.css');
 
-    expect($viteMatch)->not->toBeEmpty()
-        ->and(strpos($html, '/tallstackui/script/'))->toBeLessThan($viteMatch[0][1]);
+    expect($vitePosition)->not->toBeFalse()
+        ->and(strpos($html, '/tallstackui/script/'))->toBeLessThan($vitePosition);
 });

@@ -1,10 +1,8 @@
 name: tests
 
+# Roda só manualmente: aba Actions → "tests" → "Run workflow".
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +10,16 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+
+    # O .env.example aponta para os containers do Docker (mariadb, redis, mailpit), que não
+    # existem no runner. Variáveis de ambiente reais têm prioridade sobre o .env no Laravel.
+    env:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
 
     steps:
       - name: Checkout code
@@ -30,6 +38,9 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+
+      - name: Create SQLite database
+        run: touch database/database.sqlite
 
       - name: Setup Application
         run: composer setup
