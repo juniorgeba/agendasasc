@@ -1,0 +1,65 @@
+FROM php:8.4-fpm
+
+# Defina seu usuário aqui (deve ser o mesmo da sua máquina host)
+ARG user=junior
+ARG uid=1000
+
+# Espelho Debian opcional (ex.: http://debian.c3sl.ufpr.br) para redes que bloqueiam deb.debian.org.
+# Vazio = espelhos oficiais.
+ARG DEBIAN_MIRROR=""
+
+# Instalar dependências do sistema
+RUN if [ -n "$DEBIAN_MIRROR" ]; then sed -i "s|http://deb.debian.org|$DEBIAN_MIRROR|g" /etc/apt/sources.list.d/debian.sources; fi \
+    && apt-get update && apt-get install -y --no-install-recommends --fix-missing \
+    git \
+    curl \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libzip-dev \
+    libicu-dev \
+    libonig-dev \
+    libxml2-dev \
+    libmagickwand-dev \
+    librsvg2-bin \
+    librsvg2-common \
+    zip \
+    unzip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar extensões PHP necessárias para o Laravel
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+    pdo_mysql \
+    mbstring \
+    zip \
+    exif \
+    pcntl \
+    gd \
+    bcmath \
+    intl \
+    sockets
+
+# Instalar e habilitar Redis e Imagick (Imagick recorta fotos e rasteriza os ícones SVG)
+RUN pecl install -o -f redis imagick \
+    && rm -rf /tmp/pear \
+    && docker-php-ext-enable redis imagick
+
+# Trazer o Composer da imagem oficial
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Criar usuário do sistema para rodar Composer e Artisan
+# Isso resolve o problema de ownership com o Git e volumes Docker
+RUN useradd -G www-data,root -u $uid -d /home/$user $user
+RUN mkdir -p /home/$user/.composer && \
+    chown -R $user:$user /home/$user
+
+# Definir diretório de trabalho
+WORKDIR /var/www
+
+# Copiar configurações customizadas do PHP
+COPY docker/php/custom.dev.ini /usr/local/etc/php/conf.d/custom.ini
+
+# Usar o usuário criado (não root)
+USER $user
